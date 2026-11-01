@@ -1,0 +1,608 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Signal Lite - Fullscreen Direct Chat</title>
+  
+  <!-- PeerJS SDK -->
+  <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+  <!-- QRCode.js -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+
+  <style>
+    :root {
+      --bg-color: #0e1621;
+      --header-bg: #17212b;
+      --card-border: #242f3d;
+      --primary: #2aacc8;
+      --primary-hover: #1e96b0;
+      --accent: #64b5f6;
+      --text-main: #f5f5f5;
+      --text-muted: #7f91a4;
+      --input-bg: #17212b;
+      --chat-sent: #2b5278;
+      --chat-received: #182533;
+      --app-height: 100dvh;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    html, body {
+      width: 100%;
+      height: var(--app-height);
+      min-height: 0;
+      background-color: var(--bg-color);
+      color: var(--text-main);
+      overflow: hidden;
+    }
+
+    body {
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Full-width Header */
+    header {
+      background-color: var(--header-bg);
+      border-bottom: 1px solid var(--card-border);
+      padding: 12px 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-shrink: 0;
+      z-index: 10;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .brand-icon {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background-color: #ef4444;
+      box-shadow: 0 0 6px #ef4444;
+      transition: all 0.3s ease;
+    }
+
+    .brand-icon.connected {
+      background-color: #4ade80;
+      box-shadow: 0 0 6px #4ade80;
+    }
+
+    .brand h1 {
+      font-size: 1.1rem;
+      font-weight: 600;
+    }
+
+    .badge {
+      font-size: 0.75rem;
+      padding: 4px 10px;
+      border-radius: 12px;
+      background: #242f3d;
+      color: var(--text-muted);
+    }
+
+    .badge.online {
+      background: rgba(42, 172, 200, 0.2);
+      color: var(--primary);
+    }
+
+    /* Viewport Main Container */
+    main {
+      flex: 1;
+      width: 100%;
+      height: auto;
+      min-height: 0;
+      position: relative;
+      overflow: hidden;
+      display: flex;
+    }
+
+    /* Connection Setup Screen */
+    .setup-card {
+      width: 100%;
+      max-width: 480px;
+      margin: auto;
+      padding: 24px;
+      background: var(--header-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+    }
+
+    .tabs {
+      display: flex;
+      background: #0e1621;
+      padding: 4px;
+      border-radius: 10px;
+      gap: 4px;
+    }
+
+    .tab-btn {
+      flex: 1;
+      padding: 10px;
+      border: none;
+      background: transparent;
+      color: var(--text-muted);
+      font-weight: 600;
+      font-size: 0.9rem;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+
+    .tab-btn.active {
+      background: var(--header-bg);
+      color: var(--text-main);
+    }
+
+    .tab-content {
+      display: none;
+      flex-direction: column;
+      gap: 14px;
+      align-items: center;
+      text-align: center;
+    }
+
+    .tab-content.active {
+      display: flex;
+    }
+
+    .room-code-box {
+      font-size: 2.2rem;
+      font-weight: 700;
+      letter-spacing: 4px;
+      color: var(--primary);
+      background: #0e1621;
+      padding: 12px 24px;
+      border-radius: 12px;
+      border: 1px dashed var(--primary);
+    }
+
+    #qrcode {
+      background: white;
+      padding: 10px;
+      border-radius: 12px;
+      margin: 6px 0;
+    }
+
+    .input-field {
+      width: 100%;
+      padding: 14px;
+      background: #0e1621;
+      border: 1px solid var(--card-border);
+      border-radius: 10px;
+      color: var(--text-main);
+      font-size: 1.1rem;
+      text-align: center;
+      letter-spacing: 2px;
+      outline: none;
+    }
+
+    .btn {
+      width: 100%;
+      padding: 14px;
+      border: none;
+      border-radius: 10px;
+      font-weight: 600;
+      font-size: 1rem;
+      cursor: pointer;
+    }
+
+    .btn-primary {
+      background: var(--primary);
+      color: #fff;
+    }
+
+    .btn-secondary {
+      background: #242f3d;
+      color: var(--text-main);
+    }
+
+    /* Telegram Full-Width Chat UI */
+    .chat-container {
+      display: none;
+      flex-direction: column;
+      width: 100%;
+      height: 100%;
+      min-height: 0;
+      overflow: hidden;
+      background: var(--bg-color);
+    }
+
+    .chat-container.active {
+      display: flex;
+    }
+
+    .messages-list {
+      flex: 1;
+      min-height: 0;
+      padding: 16px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      scroll-behavior: smooth;
+    }
+
+    .msg-wrapper {
+      display: flex;
+      flex-direction: column;
+      max-width: 82%;
+    }
+
+    .msg-wrapper.sent {
+      align-self: flex-end;
+    }
+
+    .msg-wrapper.received {
+      align-self: flex-start;
+    }
+
+    .msg-bubble {
+      padding: 10px 14px;
+      border-radius: 14px;
+      font-size: 0.95rem;
+      line-height: 1.45;
+      word-break: break-word;
+    }
+
+    .msg-wrapper.sent .msg-bubble {
+      background: var(--chat-sent);
+      color: #fff;
+      border-bottom-right-radius: 2px;
+    }
+
+    .msg-wrapper.received .msg-bubble {
+      background: var(--chat-received);
+      color: var(--text-main);
+      border-bottom-left-radius: 2px;
+      border: 1px solid var(--card-border);
+    }
+
+    .msg-meta {
+      font-size: 0.65rem;
+      color: var(--text-muted);
+      margin-top: 4px;
+      padding: 0 4px;
+    }
+
+    .msg-wrapper.sent .msg-meta {
+      text-align: right;
+    }
+
+    /* Full Bottom Dock Chat Input */
+    .chat-input-area {
+      flex-shrink: 0;
+      padding: 10px 12px;
+      padding-bottom: max(10px, env(safe-area-inset-bottom));
+      background: var(--header-bg);
+      border-top: 1px solid var(--card-border);
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .chat-input {
+      flex: 1;
+      padding: 12px 18px;
+      background: #0e1621;
+      border: 1px solid var(--card-border);
+      border-radius: 24px;
+      color: var(--text-main);
+      font-size: 16px;
+      outline: none;
+    }
+
+    .chat-input:focus {
+      border-color: var(--primary);
+    }
+
+    @media (max-width: 600px) {
+      .chat-container {
+        min-height: 0;
+      }
+
+      .messages-list {
+        -webkit-overflow-scrolling: touch;
+        overscroll-behavior: contain;
+      }
+
+      .chat-input {
+        min-width: 0;
+      }
+    }
+
+    .send-btn {
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      background: var(--primary);
+      border: none;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="brand">
+      <div id="statusDot" class="brand-icon"></div>
+      <h1>Signal Lite</h1>
+    </div>
+    <div id="statusBadge" class="badge">Disconnected</div>
+  </header>
+
+  <main>
+    <!-- Setup Screen -->
+    <div id="setupCard" class="setup-card">
+      <div class="tabs">
+        <button class="tab-btn active" onclick="switchTab('host')">Host Room</button>
+        <button class="tab-btn" onclick="switchTab('join')">Join Room</button>
+      </div>
+
+      <div id="hostTab" class="tab-content active">
+        <p style="color: var(--text-muted); font-size: 0.85rem;">Share Room Code or QR Code:</p>
+        <div id="roomCodeDisplay" class="room-code-box">----</div>
+        <div id="qrcode"></div>
+        <button class="btn btn-secondary" onclick="copyShareLink()">📋 Copy Invite Link</button>
+      </div>
+
+      <div id="joinTab" class="tab-content">
+        <p style="color: var(--text-muted); font-size: 0.85rem;">Enter Host Room Code:</p>
+        <input type="text" id="joinCodeInput" class="input-field" placeholder="CODE" maxlength="6" autocomplete="off">
+        <button class="btn btn-primary" onclick="connectToPeer()">⚡ Connect Direct</button>
+      </div>
+    </div>
+
+    <!-- Telegram Fullscreen Chat Screen -->
+    <div id="chatContainer" class="chat-container">
+      <div id="messagesList" class="messages-list"></div>
+      
+      <form class="chat-input-area" onsubmit="sendMessage(event)">
+        <input type="text" id="messageInput" class="chat-input" placeholder="Message..." autocomplete="off">
+        <button type="submit" class="send-btn">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="22" y1="2" x2="11" y2="13"></line>
+            <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+          </svg>
+        </button>
+      </form>
+    </div>
+  </main>
+
+  <script>
+    let peer = null;
+    let conn = null;
+    let myRoomCode = '';
+
+    // Mobile keyboard / visual viewport support
+    function adjustMobileViewport() {
+      const viewport = window.visualViewport;
+      const height = viewport ? viewport.height : window.innerHeight;
+
+      document.documentElement.style.setProperty(
+        '--app-height',
+        height + 'px'
+      );
+
+      const list = document.getElementById('messagesList');
+      if (
+        list &&
+        document.activeElement &&
+        document.activeElement.id === 'messageInput'
+      ) {
+        requestAnimationFrame(() => {
+          list.scrollTop = list.scrollHeight;
+        });
+      }
+    }
+
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', adjustMobileViewport);
+      window.visualViewport.addEventListener('scroll', adjustMobileViewport);
+    }
+
+    window.addEventListener('resize', adjustMobileViewport);
+    window.addEventListener('orientationchange', () => {
+      setTimeout(adjustMobileViewport, 200);
+    });
+
+    const messageInput = document.getElementById('messageInput');
+
+    messageInput.addEventListener('focus', () => {
+      setTimeout(adjustMobileViewport, 120);
+    });
+
+    messageInput.addEventListener('blur', () => {
+      setTimeout(adjustMobileViewport, 120);
+    });
+
+    adjustMobileViewport();
+
+    function generateCode() {
+      const chars = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
+      let result = '';
+      for (let i = 0; i < 4; i++) {
+        result += chars.charAt(Math.floor(Math.random() * chars.length));
+      }
+      return result;
+    }
+
+    function initHost() {
+      myRoomCode = generateCode();
+      const fullId = 'signallite-' + myRoomCode;
+
+      peer = new Peer(fullId, {
+        debug: 1,
+        config: {
+          iceServers: [
+            { urls: 'stun:stun.l.google.com:19302' },
+            { urls: 'stun:stun2.l.google.com:19302' }
+          ]
+        }
+      });
+
+      peer.on('open', () => {
+        document.getElementById('roomCodeDisplay').innerText = myRoomCode;
+        generateQR(myRoomCode);
+        checkUrlParams();
+      });
+
+      peer.on('connection', (connection) => {
+        conn = connection;
+        setupChatHandlers();
+      });
+
+      peer.on('error', (err) => {
+        if(err.type === 'unavailable-id') initHost();
+      });
+    }
+
+    function connectToPeer(customCode) {
+      const code = (customCode || document.getElementById('joinCodeInput').value).trim().toUpperCase();
+      if (!code) return alert('Please enter a room code');
+
+      const targetId = 'signallite-' + code;
+      
+      if (!peer) {
+        peer = new Peer({
+          config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] }
+        });
+      }
+
+      updateStatus('Connecting...', false);
+      conn = peer.connect(targetId, { reliable: true });
+      setupChatHandlers();
+    }
+
+    function setupChatHandlers() {
+      conn.on('open', () => {
+        updateStatus('Connected Direct', true);
+        document.getElementById('setupCard').style.display = 'none';
+        document.getElementById('chatContainer').classList.add('active');
+        adjustMobileViewport();
+      });
+
+      conn.on('data', (data) => appendMessage(data, 'received'));
+
+      conn.on('close', () => {
+        updateStatus('Disconnected', false);
+        alert('Peer disconnected');
+        location.reload();
+      });
+    }
+
+    function sendMessage(e) {
+      e.preventDefault();
+      const input = document.getElementById('messageInput');
+      const text = input.value.trim();
+      
+      if (text && conn && conn.open) {
+        conn.send(text);
+        appendMessage(text, 'sent');
+        input.value = '';
+      }
+    }
+
+    function appendMessage(text, type) {
+      const list = document.getElementById('messagesList');
+      const wrapper = document.createElement('div');
+      wrapper.className = `msg-wrapper ${type}`;
+
+      const now = new Date();
+      const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+      wrapper.innerHTML = `
+        <div class="msg-bubble">${escapeHtml(text)}</div>
+        <div class="msg-meta">${timeStr}</div>
+      `;
+
+      list.appendChild(wrapper);
+      list.scrollTop = list.scrollHeight;
+    }
+
+    function generateQR(code) {
+      const qrContainer = document.getElementById('qrcode');
+      qrContainer.innerHTML = '';
+      const shareUrl = `${window.location.origin}${window.location.pathname}?join=${code}`;
+      new QRCode(qrContainer, {
+        text: shareUrl,
+        width: 110,
+        height: 110,
+        colorDark : "#000000",
+        colorLight : "#ffffff",
+        correctLevel : QRCode.CorrectLevel.L
+      });
+    }
+
+    function copyShareLink() {
+      const shareUrl = `${window.location.origin}${window.location.pathname}?join=${myRoomCode}`;
+      navigator.clipboard.writeText(shareUrl);
+      alert('Direct invite link copied!');
+    }
+
+    function checkUrlParams() {
+      const urlParams = new URLSearchParams(window.location.search);
+      const joinCode = urlParams.get('join');
+      if (joinCode) {
+        switchTab('join');
+        document.getElementById('joinCodeInput').value = joinCode;
+        connectToPeer(joinCode);
+      }
+    }
+
+    function switchTab(tab) {
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+
+      if (tab === 'host') {
+        document.querySelectorAll('.tab-btn')[0].classList.add('active');
+        document.getElementById('hostTab').classList.add('active');
+      } else {
+        document.querySelectorAll('.tab-btn')[1].classList.add('active');
+        document.getElementById('joinTab').classList.add('active');
+      }
+    }
+
+    function updateStatus(text, isOnline) {
+      const badge = document.getElementById('statusBadge');
+      const dot = document.getElementById('statusDot');
+      badge.innerText = text;
+      if (isOnline) {
+        badge.classList.add('online');
+        dot.classList.add('connected');
+      } else {
+        badge.classList.remove('online');
+        dot.classList.remove('connected');
+      }
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.innerText = text;
+      return div.innerHTML;
+    }
+
+    window.onload = () => initHost();
+  </script>
+</body>
+</html>
